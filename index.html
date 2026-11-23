@@ -1,0 +1,879 @@
+<!DOCTYPE html>
+<html lang="zh-CN" class="h-full bg-[#FAF7F2]">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>番茄钟 - 极简专注应用</title>
+    <!-- iOS & Mobile Web App Meta Tags -->
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="default">
+    <meta name="apple-mobile-web-app-title" content="番茄钟">
+    <meta name="theme-color" content="#E53935">
+    
+    <!-- PWA App Icons -->
+    <link rel="apple-touch-icon" href="./clock.png">
+    <link rel="icon" type="image/png" href="./clock.png">
+    
+    <!-- Tailwind CSS CDN -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        tomato: {
+                            50: '#FFEBEE',
+                            100: '#FFCDD2',
+                            500: '#E53935',
+                            600: '#D32F2F',
+                            700: '#C62828',
+                        }
+                    },
+                    fontFamily: {
+                        sans: ['-apple-system', 'BlinkMacSystemFont', '"Segoe UI"', 'Roboto', 'PingFang SC', 'Hiragino Sans GB', '"Microsoft YaHei"', 'sans-serif'],
+                    }
+                }
+            }
+        }
+    </script>
+    <style>
+        ::-webkit-scrollbar { width: 4px; height: 4px; }
+        ::-webkit-scrollbar-thumb { background: #E53935; border-radius: 4px; }
+        .no-scrollbar::-webkit-scrollbar { display: none; }
+        .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+    </style>
+</head>
+<body class="h-full flex flex-col font-sans text-stone-800 antialiased select-none bg-[#FAF7F2] pb-20">
+
+    <!-- Top App Header Bar -->
+    <header class="sticky top-0 z-30 bg-[#FAF7F2]/95 backdrop-blur-md border-b border-stone-200 px-4 py-3 shadow-sm">
+        <div class="max-w-lg mx-auto flex items-center justify-between">
+            <div class="flex items-center space-x-2.5">
+                <!-- Tomato Clock Icon -->
+                <img src="./clock.png" alt="番茄钟" class="w-8 h-8 rounded-xl shadow-md object-cover bg-tomato-500 shrink-0" onerror="this.onerror=null; this.outerHTML='<div class=\'w-8 h-8 rounded-xl bg-tomato-500 flex items-center justify-center shadow-md text-white font-bold text-base\'>🍅</div>';">
+                <div>
+                    <h1 class="font-extrabold text-lg text-stone-900 leading-tight">番茄钟</h1>
+                    <p class="text-[11px] text-stone-500 flex items-center gap-1">
+                        <span id="wakeLockBadge" class="inline-block w-2 h-2 rounded-full bg-stone-300"></span>
+                        <span id="wakeLockStatusText">后台熄屏保护: 未开启</span>
+                    </p>
+                </div>
+            </div>
+            <div class="flex items-center space-x-1.5">
+                <!-- Quick Test Fast Timer -->
+                <button id="fastTestBtn" title="快速试跑倒计时" class="px-2.5 py-1 text-[11px] font-semibold rounded-full bg-amber-100 text-amber-800 border border-amber-300 hover:bg-amber-200 transition active:scale-95 flex items-center gap-1">
+                    ⚡ 极速测试
+                </button>
+            </div>
+        </div>
+    </header>
+
+    <!-- MAIN CONTENT CONTAINERS -->
+    <main class="flex-1 max-w-lg w-full mx-auto px-4 py-4 overflow-y-auto">
+
+        <!-- VIEW 1: MAIN POMODORO TIMER VIEW (仅保留截图中两张核心卡片) -->
+        <section id="viewTimer" class="space-y-4">
+            
+            <!-- CARD 1: Select Current Focus Project (选择当前专注项目) -->
+            <div class="bg-white rounded-3xl p-4 shadow-sm border border-stone-200/80 space-y-3">
+                <div class="flex justify-between items-center px-1">
+                    <span class="text-xs font-bold text-stone-600 tracking-wide">选择当前专注项目</span>
+                    <button id="openAddProjectBtn" class="text-xs font-bold text-tomato-600 hover:text-tomato-700 flex items-center gap-0.5 transition active:scale-95">
+                        <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/></svg>
+                        添加项目
+                    </button>
+                </div>
+                <!-- Project Tags Carousel -->
+                <div id="projectTagsContainer" class="flex gap-2 overflow-x-auto pb-1 pt-0.5 no-scrollbar">
+                    <!-- Rendered by JS -->
+                </div>
+            </div>
+
+            <!-- CARD 2: Large Countdown Timer Card (番茄钟倒计时核心大卡片) -->
+            <div class="bg-white rounded-3xl p-6 shadow-sm border border-stone-200/80 flex flex-col items-center justify-center relative overflow-hidden space-y-4">
+                <!-- Background Soft Red Glow -->
+                <div class="absolute -top-16 -right-16 w-36 h-36 bg-tomato-50/70 rounded-full blur-2xl pointer-events-none"></div>
+
+                <!-- Active Project Pill Badge -->
+                <div class="px-3.5 py-1 rounded-full bg-tomato-50 text-tomato-600 text-xs font-semibold border border-tomato-100/80 flex items-center gap-1.5 shadow-2xs">
+                    <span class="w-2 h-2 rounded-full bg-tomato-500 animate-pulse"></span>
+                    当前项目: <span id="activeProjectLabel" class="font-bold">练字</span>
+                </div>
+
+                <!-- Circular Progress Bar & Digital Timer -->
+                <div class="relative w-60 h-60 flex items-center justify-center my-1">
+                    <svg class="w-full h-full transform -rotate-90" viewBox="0 0 100 100">
+                        <!-- Background track circle -->
+                        <circle cx="50" cy="50" r="44" stroke="#F3F4F6" stroke-width="5" fill="transparent"/>
+                        <!-- Animated Progress circle -->
+                        <circle id="timerProgressCircle" cx="50" cy="50" r="44" stroke="#E53935" stroke-width="5" stroke-linecap="round" stroke-dasharray="276.46" stroke-dashoffset="0" fill="transparent" class="transition-all duration-300 ease-linear"/>
+                    </svg>
+                    <!-- Center Display -->
+                    <div class="absolute inset-0 flex flex-col items-center justify-center text-center">
+                        <div id="timerDisplay" class="text-5xl font-black text-stone-800 tracking-tight font-mono">
+                            25:00
+                        </div>
+                        <div id="timerStateText" class="text-xs font-semibold text-stone-500 mt-2">
+                            准备开始专注
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Control Buttons: Reset & Start/Pause -->
+                <div class="flex items-center justify-center space-x-3 w-full pt-1">
+                    <!-- Reset Button -->
+                    <button id="resetTimerBtn" class="px-5 py-3 rounded-2xl bg-stone-100 hover:bg-stone-200 text-stone-700 font-bold text-sm transition active:scale-95 disabled:opacity-40">
+                        重置
+                    </button>
+                    <!-- Main Start Button -->
+                    <button id="toggleTimerBtn" class="flex-1 max-w-[170px] py-3 rounded-2xl bg-tomato-500 hover:bg-tomato-600 active:bg-tomato-700 text-white font-bold text-base shadow-md shadow-tomato-500/25 transition transform active:scale-95 flex items-center justify-center gap-2">
+                        <svg id="playIcon" class="w-5 h-5 fill-current" viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg>
+                        <span id="startBtnText">开始专注</span>
+                    </button>
+                </div>
+            </div>
+
+        </section>
+
+        <!-- VIEW 2: STATISTICS VIEW (支持日期切换与回到今天) -->
+        <section id="viewStats" class="space-y-4 hidden">
+            <div class="bg-white rounded-3xl p-5 shadow-sm border border-stone-200/80 space-y-4">
+                <div class="flex items-center justify-between">
+                    <h2 class="font-bold text-base text-stone-900 flex items-center gap-1.5">
+                        📊 专注统计
+                    </h2>
+                    <!-- Back to Today Button (回到当天) -->
+                    <button id="backToTodayBtn" class="px-3 py-1 bg-tomato-50 hover:bg-tomato-100 text-tomato-600 border border-tomato-200 text-xs font-bold rounded-full transition active:scale-95 flex items-center gap-1">
+                        ↩ 回到今天
+                    </button>
+                </div>
+
+                <!-- Period Tabs (日 / 周 / 月 / 年) -->
+                <div class="flex bg-stone-100 p-1 rounded-xl gap-1">
+                    <button data-period="day" class="stat-period-tab flex-1 py-1.5 text-xs font-bold rounded-lg bg-white shadow-xs text-stone-800 transition">日</button>
+                    <button data-period="week" class="stat-period-tab flex-1 py-1.5 text-xs font-bold rounded-lg text-stone-500 transition">周</button>
+                    <button data-period="month" class="stat-period-tab flex-1 py-1.5 text-xs font-bold rounded-lg text-stone-500 transition">月</button>
+                    <button data-period="year" class="stat-period-tab flex-1 py-1.5 text-xs font-bold rounded-lg text-stone-500 transition">年</button>
+                </div>
+
+                <!-- Date Navigation Bar & Picker -->
+                <div class="flex items-center justify-between bg-stone-50 p-2 rounded-2xl border border-stone-200/70 text-xs">
+                    <button id="prevDateBtn" class="px-2.5 py-1 bg-white hover:bg-stone-100 rounded-lg border border-stone-200 font-bold text-stone-700 active:scale-95">
+                        &lt; 上一<span id="prevUnitLabel">天</span>
+                    </button>
+                    
+                    <div class="flex items-center gap-1 font-bold text-stone-800">
+                        <input id="statDatePicker" type="date" class="bg-transparent text-center font-bold font-mono focus:outline-none cursor-pointer">
+                    </div>
+
+                    <button id="nextDateBtn" class="px-2.5 py-1 bg-white hover:bg-stone-100 rounded-lg border border-stone-200 font-bold text-stone-700 active:scale-95">
+                        下一<span id="nextUnitLabel">天</span> &gt;
+                    </button>
+                </div>
+
+                <!-- Aggregated Summary Cards -->
+                <div class="grid grid-cols-2 gap-3">
+                    <div class="bg-tomato-50/70 border border-tomato-100 rounded-2xl p-3.5 text-center">
+                        <div class="text-xs font-semibold text-tomato-700 mb-1">完成番茄钟</div>
+                        <div id="statTotalTomatoes" class="text-2xl font-black text-tomato-600">0</div>
+                        <div class="text-[10px] text-tomato-500 mt-0.5">个番茄</div>
+                    </div>
+                    <div class="bg-emerald-50/70 border border-emerald-100 rounded-2xl p-3.5 text-center">
+                        <div class="text-xs font-semibold text-emerald-700 mb-1">累计专注时长</div>
+                        <div id="statTotalMinutes" class="text-2xl font-black text-emerald-600">0</div>
+                        <div class="text-[10px] text-emerald-500 mt-0.5">分钟</div>
+                    </div>
+                </div>
+
+                <!-- Breakdown by Project -->
+                <div class="space-y-3 pt-1">
+                    <h3 class="text-xs font-bold text-stone-500 uppercase tracking-wider">各项目专注统计</h3>
+                    <div id="projectStatsContainer" class="space-y-2.5">
+                        <!-- Progress bars rendered by JS -->
+                    </div>
+                </div>
+            </div>
+
+            <!-- Detailed Log List -->
+            <div class="bg-white rounded-3xl p-5 shadow-sm border border-stone-200/80 space-y-3">
+                <div class="flex items-center justify-between">
+                    <h3 class="font-bold text-stone-800 text-sm">🗓️ 当前范围明细</h3>
+                    <span id="logCountBadge" class="text-xs px-2 py-0.5 rounded-full bg-stone-100 text-stone-600 font-medium">0条记录</span>
+                </div>
+                <div id="historyLogsContainer" class="space-y-2 max-h-64 overflow-y-auto pr-1 text-xs">
+                    <!-- JS populated logs -->
+                </div>
+            </div>
+        </section>
+
+        <!-- VIEW 3: SETTINGS VIEW -->
+        <section id="viewSettings" class="space-y-4 hidden">
+            <!-- PWA Installation Helper Card -->
+            <div class="bg-gradient-to-br from-tomato-500 to-tomato-600 rounded-3xl p-5 text-white shadow-md space-y-3">
+                <div class="flex items-center gap-3">
+                    <div class="w-10 h-10 bg-white/20 rounded-2xl flex items-center justify-center text-xl">
+                        📲
+                    </div>
+                    <div>
+                        <h2 class="font-bold text-base">添加到手机桌面 (PWA)</h2>
+                        <p class="text-xs opacity-90">独立应用模式运行，熄屏保活不中断</p>
+                    </div>
+                </div>
+                <div class="bg-white/10 rounded-2xl p-3 text-xs space-y-1.5 leading-relaxed">
+                    <p><strong>iOS Safari:</strong> 点击底部 <span class="bg-white/20 px-1 rounded">⎋ 分享</span> ➔ 选择 <strong>“添加到主屏幕”</strong></p>
+                    <p><strong>Android Chrome:</strong> 点击右上角 <span class="bg-white/20 px-1 rounded">⋮ 菜单</span> ➔ 选择 <strong>“安装应用”</strong></p>
+                </div>
+            </div>
+
+            <!-- Timer Settings Card -->
+            <div class="bg-white rounded-3xl p-5 shadow-sm border border-stone-200/80 space-y-4">
+                <h3 class="font-bold text-stone-800 text-sm border-b pb-2">⚙️ 时长偏好设置</h3>
+                <div class="space-y-3 text-xs">
+                    <div class="flex items-center justify-between">
+                        <label class="font-semibold text-stone-700">专注时长 (分钟):</label>
+                        <select id="focusDurationSelect" class="bg-stone-100 border border-stone-200 rounded-xl px-3 py-1.5 font-bold text-stone-800">
+                            <option value="25" selected>25 分钟 (标准)</option>
+                            <option value="15">15 分钟</option>
+                            <option value="20">20 分钟</option>
+                            <option value="30">30 分钟</option>
+                            <option value="45">45 分钟</option>
+                            <option value="60">60 分钟</option>
+                        </select>
+                    </div>
+                    <div class="flex items-center justify-between">
+                        <label class="font-semibold text-stone-700">休息时长 (分钟):</label>
+                        <select id="breakDurationSelect" class="bg-stone-100 border border-stone-200 rounded-xl px-3 py-1.5 font-bold text-stone-800">
+                            <option value="5" selected>5 分钟 (标准)</option>
+                            <option value="3">3 分钟</option>
+                            <option value="10">10 分钟</option>
+                            <option value="15">15 分钟</option>
+                        </select>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Sound & Audio Test -->
+            <div class="bg-white rounded-3xl p-5 shadow-sm border border-stone-200/80 space-y-3">
+                <h3 class="font-bold text-stone-800 text-sm border-b pb-2">🔔 提示音设置与测试</h3>
+                <div class="flex gap-2 text-xs">
+                    <button id="testFocusChimeBtn" class="flex-1 py-2.5 bg-stone-100 hover:bg-stone-200 rounded-xl font-bold text-stone-700 transition">
+                        🔊 测试专注完成音
+                    </button>
+                    <button id="testBreakChimeBtn" class="flex-1 py-2.5 bg-stone-100 hover:bg-stone-200 rounded-xl font-bold text-stone-700 transition">
+                        ☕ 测试休息完成音
+                    </button>
+                </div>
+            </div>
+
+            <!-- Clear Data -->
+            <div class="bg-white rounded-3xl p-5 shadow-sm border border-stone-200/80 space-y-3">
+                <h3 class="font-bold text-stone-800 text-sm border-b pb-2">🗑️ 清除所有数据</h3>
+                <button id="clearAllDataBtn" class="w-full py-2.5 bg-red-50 hover:bg-red-100 border border-red-200 text-red-600 font-bold rounded-xl text-xs transition">
+                    清空历史专注数据与自定义项目
+                </button>
+            </div>
+        </section>
+
+    </main>
+
+    <!-- BOTTOM NAVIGATION TAB BAR (根据指示首项改为“专注计时”) -->
+    <nav class="fixed bottom-0 left-0 right-0 z-30 bg-white/95 backdrop-blur-md border-t border-stone-200 py-2 px-6 max-w-lg mx-auto flex items-center justify-around shadow-lg">
+        <button data-tab="viewTimer" class="nav-tab-btn flex flex-col items-center gap-0.5 text-tomato-600">
+            <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+            <span class="text-[11px] font-bold">专注计时</span>
+        </button>
+        <button data-tab="viewStats" class="nav-tab-btn flex flex-col items-center gap-0.5 text-stone-400 hover:text-stone-700">
+            <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"/></svg>
+            <span class="text-[11px] font-bold">数据统计</span>
+        </button>
+        <button data-tab="viewSettings" class="nav-tab-btn flex flex-col items-center gap-0.5 text-stone-400 hover:text-stone-700">
+            <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"/><circle cx="12" cy="12" r="3"/></svg>
+            <span class="text-[11px] font-bold">设置/指南</span>
+        </button>
+    </nav>
+
+    <!-- MODAL 1: ADD CUSTOM PROJECT MODAL -->
+    <div id="addProjectModal" class="fixed inset-0 z-50 bg-stone-900/60 backdrop-blur-xs flex items-center justify-center p-4 hidden">
+        <div class="bg-white rounded-3xl p-6 max-w-xs w-full shadow-2xl space-y-4">
+            <h3 class="font-bold text-stone-900 text-base">
+                ✨ 添加专注项目
+            </h3>
+            <div>
+                <label class="block text-xs font-semibold text-stone-600 mb-1">项目名称</label>
+                <input id="customProjectInput" type="text" maxlength="8" placeholder="如：创作小说、背单词..." class="w-full px-3.5 py-2.5 bg-stone-100 border border-stone-200 rounded-xl text-sm font-semibold text-stone-800 focus:outline-none focus:ring-2 focus:ring-tomato-500">
+            </div>
+            <div class="flex justify-end gap-2 pt-1">
+                <button id="cancelProjectBtn" class="px-4 py-2 rounded-xl text-stone-600 text-xs font-bold hover:bg-stone-100">取消</button>
+                <button id="confirmProjectBtn" class="px-4 py-2 rounded-xl bg-tomato-500 hover:bg-tomato-600 text-white text-xs font-bold shadow">确认添加</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- MODAL 2: BREAK FINISHED PROMPT MODAL -->
+    <div id="breakPromptModal" class="fixed inset-0 z-50 bg-stone-900/70 backdrop-blur-xs flex items-center justify-center p-4 hidden">
+        <div class="bg-white rounded-3xl p-6 max-w-sm w-full shadow-2xl space-y-4 text-center">
+            <div class="w-16 h-16 bg-emerald-100 text-emerald-600 rounded-full flex items-center justify-center text-3xl mx-auto">
+                ☕
+            </div>
+            <div>
+                <h3 class="font-black text-stone-900 text-lg">休息时间结束！</h3>
+                <p class="text-xs text-stone-500 mt-1">精力已充满，是否开始下一个番茄钟？</p>
+            </div>
+            <div class="space-y-2 pt-2">
+                <button id="continueNextFocusBtn" class="w-full py-3 bg-tomato-500 hover:bg-tomato-600 text-white font-bold rounded-xl text-sm shadow transition active:scale-95">
+                    🍅 开始下一个番茄钟
+                </button>
+                <button id="extendBreakBtn" class="w-full py-2.5 bg-amber-50 hover:bg-amber-100 text-amber-700 border border-amber-200 font-bold rounded-xl text-xs transition">
+                    ☕ 再休息 5 分钟
+                </button>
+                <button id="stopSessionBtn" class="w-full py-2.5 bg-stone-100 hover:bg-stone-200 text-stone-600 font-bold rounded-xl text-xs transition">
+                    🛑 结束本次专注
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- SCRIPT ENGINE -->
+    <script>
+        // --- DATA & STATE ---
+        const DEFAULT_PROJECTS = ['练字', '静坐', '创作', '阅读', '创作小说'];
+        
+        let state = {
+            projects: JSON.parse(localStorage.getItem('pomodoro_projects')) || [...DEFAULT_PROJECTS],
+            currentProject: localStorage.getItem('pomodoro_current_project') || '练字',
+            records: JSON.parse(localStorage.getItem('pomodoro_records')) || [],
+            settings: {
+                focusMinutes: parseInt(localStorage.getItem('pomodoro_focus_min')) || 25,
+                breakMinutes: parseInt(localStorage.getItem('pomodoro_break_min')) || 5
+            }
+        };
+
+        // Ensure default selected project exists
+        if (!state.projects.includes(state.currentProject)) {
+            state.currentProject = state.projects[0] || '练字';
+        }
+
+        // --- TIMER ENGINE STATE ---
+        let timerMode = 'IDLE'; // 'IDLE' | 'FOCUSING' | 'BREAKING'
+        let targetEndTime = null;
+        let timerDurationSeconds = state.settings.focusMinutes * 60;
+        let remainingSeconds = timerDurationSeconds;
+        let timerInterval = null;
+        let wakeLock = null;
+        let isFastTest = false;
+
+        // --- WEB AUDIO API SYNTHESIS ---
+        function playChime(type = 'focus') {
+            try {
+                const AudioContext = window.AudioContext || window.webkitAudioContext;
+                if (!AudioContext) return;
+                const ctx = new AudioContext();
+                const now = ctx.currentTime;
+                
+                if (type === 'focus') {
+                    const freqs = [523.25, 659.25, 783.99, 1046.50];
+                    freqs.forEach((freq, idx) => {
+                        const osc = ctx.createOscillator();
+                        const gain = ctx.createGain();
+                        osc.type = 'sine';
+                        osc.frequency.setValueAtTime(freq, now + idx * 0.12);
+                        gain.gain.setValueAtTime(0, now + idx * 0.12);
+                        gain.gain.linearRampToValueAtTime(0.3, now + idx * 0.12 + 0.03);
+                        gain.gain.exponentialRampToValueAtTime(0.001, now + idx * 0.12 + 1.2);
+                        osc.connect(gain);
+                        gain.connect(ctx.destination);
+                        osc.start(now + idx * 0.12);
+                        osc.stop(now + idx * 0.12 + 1.3);
+                    });
+                } else {
+                    const freqs = [440.00, 554.37, 659.25];
+                    freqs.forEach((freq, idx) => {
+                        const osc = ctx.createOscillator();
+                        const gain = ctx.createGain();
+                        osc.type = 'triangle';
+                        osc.frequency.setValueAtTime(freq, now + idx * 0.15);
+                        gain.gain.setValueAtTime(0, now + idx * 0.15);
+                        gain.gain.linearRampToValueAtTime(0.25, now + idx * 0.15 + 0.04);
+                        gain.gain.exponentialRampToValueAtTime(0.001, now + idx * 0.15 + 1.5);
+                        osc.connect(gain);
+                        gain.connect(ctx.destination);
+                        osc.start(now + idx * 0.15);
+                        osc.stop(now + idx * 0.15 + 1.6);
+                    });
+                }
+            } catch (e) {
+                console.warn('Audio playback error:', e);
+            }
+        }
+
+        // --- WAKE LOCK API ---
+        async function requestWakeLock() {
+            if ('wakeLock' in navigator) {
+                try {
+                    wakeLock = await navigator.wakeLock.request('screen');
+                    updateWakeLockUI(true);
+                    wakeLock.addEventListener('release', () => { updateWakeLockUI(false); });
+                } catch (err) {
+                    updateWakeLockUI(false);
+                }
+            }
+        }
+
+        function releaseWakeLock() {
+            if (wakeLock) {
+                wakeLock.release().then(() => { wakeLock = null; });
+            }
+            updateWakeLockUI(false);
+        }
+
+        function updateWakeLockUI(active) {
+            const badge = document.getElementById('wakeLockBadge');
+            const text = document.getElementById('wakeLockStatusText');
+            if (active) {
+                badge.className = 'inline-block w-2 h-2 rounded-full bg-emerald-500 animate-pulse';
+                text.innerText = '后台熄屏保护: 已开启';
+                text.className = 'text-emerald-600 font-medium';
+            } else {
+                badge.className = 'inline-block w-2 h-2 rounded-full bg-stone-300';
+                text.innerText = '后台熄屏保护: 未开启';
+                text.className = 'text-stone-500';
+            }
+        }
+
+        // --- LOCAL STORAGE HELPERS ---
+        function saveProjects() { localStorage.setItem('pomodoro_projects', JSON.stringify(state.projects)); }
+        function saveRecords() { localStorage.setItem('pomodoro_records', JSON.stringify(state.records)); }
+
+        // --- RENDER PROJECT TAGS (MATCHING SCREENSHOT) ---
+        function renderProjects() {
+            const container = document.getElementById('projectTagsContainer');
+            container.innerHTML = '';
+
+            state.projects.forEach(proj => {
+                const isActive = proj === state.currentProject;
+                const btn = document.createElement('div');
+                btn.className = `group px-4 py-2 rounded-full text-xs font-bold transition flex items-center gap-1.5 cursor-pointer whitespace-nowrap active:scale-95 ${
+                    isActive 
+                    ? 'bg-tomato-500 text-white shadow-md shadow-tomato-500/25' 
+                    : 'bg-stone-100 text-stone-700 hover:bg-stone-200'
+                }`;
+                
+                btn.innerHTML = `
+                    <span>${proj}</span>
+                    ${state.projects.length > 1 ? `<span class="delete-tag-btn opacity-40 hover:opacity-100 text-[10px] ml-0.5">✕</span>` : ''}
+                `;
+
+                btn.onclick = (e) => {
+                    if (e.target.classList.contains('delete-tag-btn')) {
+                        e.stopPropagation();
+                        deleteProject(proj);
+                        return;
+                    }
+                    if (timerMode !== 'IDLE') return;
+                    state.currentProject = proj;
+                    localStorage.setItem('pomodoro_current_project', proj);
+                    document.getElementById('activeProjectLabel').innerText = proj;
+                    renderProjects();
+                };
+                container.appendChild(btn);
+            });
+
+            document.getElementById('activeProjectLabel').innerText = state.currentProject;
+        }
+
+        function deleteProject(proj) {
+            state.projects = state.projects.filter(p => p !== proj);
+            if (state.currentProject === proj) {
+                state.currentProject = state.projects[0] || '练字';
+                localStorage.setItem('pomodoro_current_project', state.currentProject);
+            }
+            saveProjects();
+            renderProjects();
+        }
+
+        // --- TIMER ENGINE LOGIC ---
+        function updateTimerDisplay() {
+            const mins = Math.floor(remainingSeconds / 60);
+            const secs = remainingSeconds % 60;
+            const formatted = `${String(mins).padStart(2, '0')}:${String(secs).padStart(2, '0')}`;
+            document.getElementById('timerDisplay').innerText = formatted;
+
+            // Stroke Progress Circle
+            const circle = document.getElementById('timerProgressCircle');
+            const total = timerDurationSeconds;
+            const progress = (total - remainingSeconds) / total;
+            const dashoffset = 276.46 * (1 - progress);
+            circle.style.strokeDashoffset = dashoffset;
+        }
+
+        function startTimer() {
+            if (timerMode === 'IDLE') {
+                timerMode = 'FOCUSING';
+                timerDurationSeconds = isFastTest ? 5 : state.settings.focusMinutes * 60;
+                remainingSeconds = timerDurationSeconds;
+                document.getElementById('timerStateText').innerText = `🍅 专注中 (${state.currentProject})`;
+                document.getElementById('timerProgressCircle').setAttribute('stroke', '#E53935');
+            } else if (timerMode === 'BREAKING') {
+                document.getElementById('timerStateText').innerText = '☕ 5分钟休息中...';
+                document.getElementById('timerProgressCircle').setAttribute('stroke', '#10B981');
+            }
+
+            targetEndTime = Date.now() + remainingSeconds * 1000;
+            requestWakeLock();
+
+            document.getElementById('startBtnText').innerText = '暂停';
+            document.getElementById('playIcon').innerHTML = '<path d="M6 19h4V5H6v14zm8-14v14h4V5h-4z"/>';
+
+            if (timerInterval) clearInterval(timerInterval);
+            timerInterval = setInterval(tick, 200);
+        }
+
+        function pauseTimer() {
+            if (timerInterval) clearInterval(timerInterval);
+            timerInterval = null;
+            releaseWakeLock();
+            document.getElementById('startBtnText').innerText = '继续';
+            document.getElementById('playIcon').innerHTML = '<path d="M8 5v14l11-7z"/>';
+        }
+
+        function resetTimer() {
+            if (timerInterval) clearInterval(timerInterval);
+            timerInterval = null;
+            releaseWakeLock();
+            timerMode = 'IDLE';
+            isFastTest = false;
+            timerDurationSeconds = state.settings.focusMinutes * 60;
+            remainingSeconds = timerDurationSeconds;
+            document.getElementById('timerStateText').innerText = '准备开始专注';
+            document.getElementById('startBtnText').innerText = '开始专注';
+            document.getElementById('playIcon').innerHTML = '<path d="M8 5v14l11-7z"/>';
+            document.getElementById('timerProgressCircle').setAttribute('stroke', '#E53935');
+            updateTimerDisplay();
+        }
+
+        function tick() {
+            const now = Date.now();
+            const diff = Math.max(0, Math.ceil((targetEndTime - now) / 1000));
+            remainingSeconds = diff;
+            updateTimerDisplay();
+
+            if (remainingSeconds <= 0) {
+                clearInterval(timerInterval);
+                timerInterval = null;
+                onTimerFinish();
+            }
+        }
+
+        function onTimerFinish() {
+            if (timerMode === 'FOCUSING') {
+                playChime('focus');
+                
+                // Log Record
+                const now = new Date();
+                const record = {
+                    id: Date.now(),
+                    project: state.currentProject,
+                    timestamp: now.getTime(),
+                    dateStr: now.toISOString().split('T')[0],
+                    minutes: isFastTest ? 25 : state.settings.focusMinutes
+                };
+                state.records.push(record);
+                saveRecords();
+
+                // Transition to 5 min break
+                timerMode = 'BREAKING';
+                timerDurationSeconds = isFastTest ? 3 : state.settings.breakMinutes * 60;
+                remainingSeconds = timerDurationSeconds;
+                document.getElementById('timerStateText').innerText = '☕ 5分钟休息中...';
+                document.getElementById('timerProgressCircle').setAttribute('stroke', '#10B981');
+                
+                startTimer();
+
+            } else if (timerMode === 'BREAKING') {
+                playChime('break');
+                releaseWakeLock();
+                timerMode = 'IDLE';
+                document.getElementById('breakPromptModal').classList.remove('hidden');
+            }
+        }
+
+        // --- STATISTICS ENGINE WITH DATE PICKER & BACK TO TODAY ---
+        let currentStatPeriod = 'day'; // 'day' | 'week' | 'month' | 'year'
+        let selectedStatDate = new Date();
+
+        function setStatDate(newDate) {
+            selectedStatDate = new Date(newDate);
+            const isoStr = selectedStatDate.toISOString().split('T')[0];
+            document.getElementById('statDatePicker').value = isoStr;
+            renderStats();
+        }
+
+        function shiftStatDate(delta) {
+            const d = new Date(selectedStatDate);
+            if (currentStatPeriod === 'day') {
+                d.setDate(d.getDate() + delta);
+            } else if (currentStatPeriod === 'week') {
+                d.setDate(d.getDate() + delta * 7);
+            } else if (currentStatPeriod === 'month') {
+                d.setMonth(d.getMonth() + delta);
+            } else if (currentStatPeriod === 'year') {
+                d.setFullYear(d.getFullYear() + delta);
+            }
+            setStatDate(d);
+        }
+
+        function renderStats() {
+            const selectedIso = selectedStatDate.toISOString().split('T')[0];
+            
+            let filteredRecords = [];
+
+            if (currentStatPeriod === 'day') {
+                filteredRecords = state.records.filter(r => r.dateStr === selectedIso);
+            } else if (currentStatPeriod === 'week') {
+                // Compute Monday - Sunday range for selected date
+                const curr = new Date(selectedStatDate);
+                const dayOfWeek = curr.getDay() === 0 ? 7 : curr.getDay(); // 1-7
+                const monday = new Date(curr);
+                monday.setDate(curr.getDate() - dayOfWeek + 1);
+                monday.setHours(0,0,0,0);
+                const sunday = new Date(monday);
+                sunday.setDate(monday.getDate() + 6);
+                sunday.setHours(23,59,59,999);
+
+                filteredRecords = state.records.filter(r => r.timestamp >= monday.getTime() && r.timestamp <= sunday.getTime());
+            } else if (currentStatPeriod === 'month') {
+                const monthPrefix = selectedIso.substring(0, 7);
+                filteredRecords = state.records.filter(r => r.dateStr && r.dateStr.startsWith(monthPrefix));
+            } else if (currentStatPeriod === 'year') {
+                const yearPrefix = selectedIso.substring(0, 4);
+                filteredRecords = state.records.filter(r => r.dateStr && r.dateStr.startsWith(yearPrefix));
+            }
+
+            const totalTomatoes = filteredRecords.length;
+            const totalMinutes = filteredRecords.reduce((sum, r) => sum + (r.minutes || 25), 0);
+
+            document.getElementById('statTotalTomatoes').innerText = totalTomatoes;
+            document.getElementById('statTotalMinutes').innerText = totalMinutes;
+
+            // Project Progress Bars
+            const projectCounts = {};
+            state.projects.forEach(p => projectCounts[p] = 0);
+            filteredRecords.forEach(r => {
+                projectCounts[r.project] = (projectCounts[r.project] || 0) + 1;
+            });
+
+            const statsContainer = document.getElementById('projectStatsContainer');
+            statsContainer.innerHTML = '';
+
+            state.projects.forEach(proj => {
+                const count = projectCounts[proj] || 0;
+                const percent = totalTomatoes > 0 ? Math.round((count / totalTomatoes) * 100) : 0;
+
+                const item = document.createElement('div');
+                item.className = 'space-y-1';
+                item.innerHTML = `
+                    <div class="flex justify-between items-center text-xs font-semibold text-stone-700">
+                        <span>${proj}</span>
+                        <span class="text-stone-500">${count} 个番茄 (${percent}%)</span>
+                    </div>
+                    <div class="w-full bg-stone-100 rounded-full h-2 overflow-hidden">
+                        <div class="bg-tomato-500 h-full rounded-full transition-all duration-500" style="width: ${percent}%"></div>
+                    </div>
+                `;
+                statsContainer.appendChild(item);
+            });
+
+            // Log entries list
+            const logsContainer = document.getElementById('historyLogsContainer');
+            logsContainer.innerHTML = '';
+            document.getElementById('logCountBadge').innerText = `${filteredRecords.length}条记录`;
+
+            const sortedLogs = [...filteredRecords].reverse().slice(0, 30);
+            if (sortedLogs.length === 0) {
+                logsContainer.innerHTML = `<div class="text-center py-6 text-stone-400">该时间范围内尚无专注记录</div>`;
+            } else {
+                sortedLogs.forEach(log => {
+                    const date = new Date(log.timestamp);
+                    const timeStr = `${date.getMonth() + 1}月${date.getDate()}日 ${String(date.getHours()).padStart(2, '0')}:${String(date.getMinutes()).padStart(2, '0')}`;
+                    const el = document.createElement('div');
+                    el.className = 'flex items-center justify-between p-2.5 bg-stone-50 rounded-2xl border border-stone-200/60';
+                    el.innerHTML = `
+                        <div class="flex items-center gap-2">
+                            <span class="text-base">🍅</span>
+                            <div>
+                                <div class="font-bold text-stone-800">${log.project}</div>
+                                <div class="text-[10px] text-stone-400">${timeStr}</div>
+                            </div>
+                        </div>
+                        <span class="font-bold text-tomato-600 bg-tomato-50 px-2.5 py-0.5 rounded-full text-xs">+${log.minutes || 25} 分钟</span>
+                    `;
+                    logsContainer.appendChild(el);
+                });
+            }
+        }
+
+        // --- PWA DYNAMIC MANIFEST ---
+        function initPWA() {
+            const iconUrl = new URL('./clock.png', window.location.href).href;
+            const manifest = {
+                name: "番茄钟",
+                short_name: "番茄钟",
+                description: "极简番茄钟专注应用",
+                start_url: "./",
+                display: "standalone",
+                background_color: "#FAF7F2",
+                theme_color: "#E53935",
+                icons: [
+                    {
+                        src: iconUrl,
+                        sizes: "512x512",
+                        type: "image/png",
+                        purpose: "any maskable"
+                    }
+                ]
+            };
+            const blob = new Blob([JSON.stringify(manifest)], { type: 'application/json' });
+            let link = document.querySelector('link[rel="manifest"]');
+            if (!link) {
+                link = document.createElement('link');
+                link.rel = 'manifest';
+                document.head.appendChild(link);
+            }
+            link.href = URL.createObjectURL(blob);
+        }
+
+        // --- INITIALIZATION ---
+        window.onload = function() {
+            initPWA();
+            renderProjects();
+            updateTimerDisplay();
+            setStatDate(new Date());
+
+            // Bottom Nav Tabs
+            document.querySelectorAll('.nav-tab-btn').forEach(btn => {
+                btn.onclick = () => {
+                    const targetId = btn.getAttribute('data-tab');
+                    document.querySelectorAll('main > section').forEach(sec => sec.classList.add('hidden'));
+                    document.getElementById(targetId).classList.remove('hidden');
+
+                    document.querySelectorAll('.nav-tab-btn').forEach(b => {
+                        b.classList.remove('text-tomato-600');
+                        b.classList.add('text-stone-400');
+                    });
+                    btn.classList.remove('text-stone-400');
+                    btn.classList.add('text-tomato-600');
+
+                    if (targetId === 'viewStats') renderStats();
+                };
+            });
+
+            // Timer Controls
+            document.getElementById('toggleTimerBtn').onclick = () => {
+                if (timerInterval) pauseTimer(); else startTimer();
+            };
+            document.getElementById('resetTimerBtn').onclick = resetTimer;
+
+            // Fast Test Mode
+            document.getElementById('fastTestBtn').onclick = () => {
+                if (timerMode !== 'IDLE') return;
+                isFastTest = true;
+                startTimer();
+            };
+
+            // Project Addition Modal
+            document.getElementById('openAddProjectBtn').onclick = () => {
+                document.getElementById('addProjectModal').classList.remove('hidden');
+            };
+            document.getElementById('cancelProjectBtn').onclick = () => {
+                document.getElementById('addProjectModal').classList.add('hidden');
+            };
+            document.getElementById('confirmProjectBtn').onclick = () => {
+                const input = document.getElementById('customProjectInput');
+                const val = input.value.trim();
+                if (val && !state.projects.includes(val)) {
+                    state.projects.push(val);
+                    saveProjects();
+                    state.currentProject = val;
+                    localStorage.setItem('pomodoro_current_project', val);
+                    renderProjects();
+                }
+                input.value = '';
+                document.getElementById('addProjectModal').classList.add('hidden');
+            };
+
+            // Break Finished Modal Actions
+            document.getElementById('continueNextFocusBtn').onclick = () => {
+                document.getElementById('breakPromptModal').classList.add('hidden');
+                resetTimer();
+                startTimer();
+            };
+            document.getElementById('extendBreakBtn').onclick = () => {
+                document.getElementById('breakPromptModal').classList.add('hidden');
+                timerMode = 'BREAKING';
+                timerDurationSeconds = 5 * 60;
+                remainingSeconds = timerDurationSeconds;
+                startTimer();
+            };
+            document.getElementById('stopSessionBtn').onclick = () => {
+                document.getElementById('breakPromptModal').classList.add('hidden');
+                resetTimer();
+            };
+
+            // Statistics Date & Period Controls
+            document.querySelectorAll('.stat-period-tab').forEach(tab => {
+                tab.onclick = () => {
+                    document.querySelectorAll('.stat-period-tab').forEach(t => {
+                        t.classList.remove('bg-white', 'shadow-xs', 'text-stone-800');
+                        t.classList.add('text-stone-500');
+                    });
+                    tab.classList.add('bg-white', 'shadow-xs', 'text-stone-800');
+                    tab.classList.remove('text-stone-500');
+
+                    currentStatPeriod = tab.getAttribute('data-period');
+                    
+                    const labelMap = { day: '天', week: '周', month: '月', year: '年' };
+                    document.getElementById('prevUnitLabel').innerText = labelMap[currentStatPeriod];
+                    document.getElementById('nextUnitLabel').innerText = labelMap[currentStatPeriod];
+
+                    renderStats();
+                };
+            });
+
+            document.getElementById('statDatePicker').onchange = (e) => {
+                if (e.target.value) {
+                    setStatDate(new Date(e.target.value + 'T00:00:00'));
+                }
+            };
+            document.getElementById('prevDateBtn').onclick = () => shiftStatDate(-1);
+            document.getElementById('nextDateBtn').onclick = () => shiftStatDate(1);
+            document.getElementById('backToTodayBtn').onclick = () => setStatDate(new Date());
+
+            // Settings options
+            document.getElementById('focusDurationSelect').onchange = (e) => {
+                state.settings.focusMinutes = parseInt(e.target.value);
+                localStorage.setItem('pomodoro_focus_min', state.settings.focusMinutes);
+                if (timerMode === 'IDLE') resetTimer();
+            };
+            document.getElementById('breakDurationSelect').onchange = (e) => {
+                state.settings.breakMinutes = parseInt(e.target.value);
+                localStorage.setItem('pomodoro_break_min', state.settings.breakMinutes);
+            };
+
+            // Audio Tests
+            document.getElementById('testFocusChimeBtn').onclick = () => playChime('focus');
+            document.getElementById('testBreakChimeBtn').onclick = () => playChime('break');
+
+            // Data Reset
+            document.getElementById('clearAllDataBtn').onclick = () => {
+                state.records = [];
+                state.projects = [...DEFAULT_PROJECTS];
+                state.currentProject = '练字';
+                saveRecords();
+                saveProjects();
+                renderProjects();
+                renderStats();
+            };
+        };
+    </script>
+</body>
+</html>
